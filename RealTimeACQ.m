@@ -175,7 +175,7 @@ if ~occured_error
         end
         
         % Flush all data from both the input and output buffers of the specified serial port
-        flush(MIMU);
+%         flush(MIMU);
         Message(1,Do.MessageLog,0,'Input+Output buffer have been flushed', 'UDEF', RunID);
         
         % Flush serial ports (The MIMU team's way)
