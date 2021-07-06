@@ -197,7 +197,7 @@ if ~occured_error
         [tline,count] = fread(MIMU,4,'uint8');
         
         if count > 0
-            Message(1,Do.MessageLog,0,['Reply from MIMU: ' tline], 'UDEF', RunID);
+            Message(1,Do.MessageLog,0,['Reply from MIMU: ' strjoin(string(tline),' - ')], 'UDEF', RunID);
             if length(tline) >= length(desired_answer)
                 if strcmp(tline(1:length(desired_answer)), desired_answer) %check if desired_answer is in the answer)
                     disp(['Log creation command acknowledged']);
