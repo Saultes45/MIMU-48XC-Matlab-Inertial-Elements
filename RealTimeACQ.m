@@ -18,11 +18,11 @@
 
 %% TODO
 % functions needed
-%calculate checksum
+% calculate checksum
 % calculate bitmask with designated IMU
 % check ACK + SD present
 
-% data that can be saved: raw serial, binary data from IMU, workspace as
+% data that can be saved: raw serial, binary data from IMU, workspace as a
 % mat, specific variables as mat, figures (PNG+FIG)
 
 
@@ -32,9 +32,10 @@
 CommandsList;
 
 % Place where the Matlab-generated raw serial data log will be placed
-SerialFileLogName       = [cd '\Data\RawSerial\' RunID '_SerialData'];
+SerialFileLogName       = [cd '\Data\RawSerial\' RunID '_SerialData.txt'];
+SerialFileBinName       = [cd '\Data\BinaryData\' RunID '_SerialData.bin'];
 
-MIMU_UseSD      = 1; % for output rate divider
+MIMU_UseSD      = 0; % for output rate divider
 scale_acc       = 1/2048*9.80665;
 scale_gyro      = 1/16.4;
 scale_temp      = 1.0/340.0; %will come from IMU
@@ -44,64 +45,41 @@ scale_mag       = 0.6;
 
 %% Output data rate divider
 
-MIMU_ODR_SD    = [200 100 50 25 12.5 6.25 3.25];
-MIMU_ODR_noSD  = [562.5 281.25 140.625 70.3125 35.156 17.578 8.789];
-
-% | Output Rate Divider | Output Data Rate (Hz) (SD) | Output Data Rate (Hz) (no SD) |
-% |:-------------------:|:--------------------------:|-------------------------------|
-% |          1          |             200            |             562.5             |
-% |          2          |             100            |             281.25            |
-% |          3          |             50             |            140.625            |
-% |          4          |             25             |            70.3125            |
-% |          5          |            12.5            |             35.156            |
-% |          6          |            6.25            |             17.578            |
-% |          7          |            3.25            |             8.789             |
-
-% If the output rate divider is 32 then there will be a single packet output
-
-% check the desired ODR is possible
-%----------------------------------
-
-if isequal(size(MIMU_ODR_divider), [1 ,1])% check size
-    if ~isinteger(MIMU_ODR_divider)% check type
-        if any(MIMU_ODR_divider == [1:7 32])% check acceptable values
-            if MIMU_UseSD
-                MIMU_ODR = MIMU_ODR_SD(MIMU_ODR_divider);
-                Message(1,Do.MessageLog,0,'The user said we use SD' , 'UDEF', RunID);
-            else
-                MIMU_ODR = MIMU_ODR_noSD(MIMU_ODR_divider);
-                Message(1,Do.MessageLog,0,'The user said we don''t use the SD' , 'UDEF', RunID);
-            end
-             Message(1,Do.MessageLog,0,['The selected data output rate is: ' num2str(MIMU_ODR) '[Hz]'], 'OK', RunID);
-        else
-            Message(1,Do.MessageLog,0,'The desired ODR divider is not in the acceptable range: 1 2 3 4 5 6 7 32' , 'KO', RunID);
-            occured_error = 1;
-        end
-    else
-        Message(1,Do.MessageLog,0,'The desired ODR divider should be an integer' , 'KO', RunID);
-        occured_error = 1;
-    end
-else
-    Message(1,Do.MessageLog,0,'The desired ODR divider should be of size 1' , 'KO', RunID);
-    occured_error = 1;
-end
+ODRSelector;
 
 if ~occured_error
     
     %% Create folder for serial comm logs
     try
+        
+        % Creating a "Data folder"
+        %-------------------------
         if ~exist([cd '\Data'],'dir')
             mkdir([cd '\Data']);
             Message(1,Do.MessageLog,0,'Data folder created', 'OK', RunID);
         end
+        
+        % Creating a "Test folder"
+        %-------------------------
         if ~exist([cd '\Data\Test-' RunID],'dir')
             mkdir([cd '\Data\Test-' RunID]);
             Message(1,Do.MessageLog,0,'Test folder (within the ''Data'' folder) has been created', 'OK', RunID);
         end
+        
+        % Creating a "RawSerial folder"
+        %------------------------------
         if ~exist([cd '\Data\RawSerial'],'dir')
             mkdir([cd '\Data\RawSerial']);
             Message(1,Do.MessageLog,0,'Raw Serial data folder (within the ''Data'' folder) has been created', 'OK', RunID);
         end
+        
+        % Creating a "BinSerial folder"
+        %------------------------------
+        if ~exist([cd '\Data\BinSerial'],'dir')
+            mkdir([cd '\Data\BinSerial']);
+            Message(1,Do.MessageLog,0,'Binary Serial data folder (within the ''Data'' folder) has been created', 'OK', RunID);
+        end
+        
     catch error
         disp(error);
         occured_error = 1;
@@ -154,7 +132,7 @@ if ~occured_error
     MIMU.DataBits 		= 8;
     MIMU.ByteOrder      = 'littleEndian';
     MIMU.RecordDetail 	= 'verbose';
-    MIMU.RecordName     = [cd '\' SerialFileLogName '.txt'];
+    MIMU.RecordName     = [cd '\' SerialFileLogName];
     MIMU.Timeout 		= 3; % in [s]
     set(MIMU,'InputBufferSize', MIMU_InputBufferSize);% A large buffer size is required
     
@@ -175,22 +153,21 @@ if ~occured_error
         end
         
         % Flush all data from both the input and output buffers of the specified serial port
-%         flush(MIMU);
-        Message(1,Do.MessageLog,0,'Input+Output buffer have been flushed', 'UDEF', RunID);
-        
+        %         flush(MIMU);
         % Flush serial ports (The MIMU team's way)
         while MIMU.BytesAvailable
             fread(MIMU,MIMU.BytesAvailable,'uint8');
         end
+        Message(1,Do.MessageLog,0,'Input+Output buffer have been flushed', 'UDEF', RunID);
         
         % Open binary file for saving inertial data
-        filename = ['osmium_data - ' 'RealTime' '.bin'];
-        file = fopen(filename, 'w');
+        binFile = fopen(SerialFileBinName, 'w');
         
         % Request raw inertial data
-%         imu_mask = [255 255 255 255];
+        %         imu_mask = [255 255 255 255];
         command = [mimuCommandHeader.RawRealTime  MIMUbitmask(3,11) MIMU_ODR_divider]; % 3 = center, 11 = top+bottom
         command = [command MIMUchecksum(command)]; % apend the 2-byte checksum
+        command = [48 19 0 0 67];
         fwrite(MIMU,command,'uint8');
         
         %check we have recieved the ACK
@@ -209,6 +186,11 @@ if ~occured_error
             end
         else
             disp(['Message sent but no answer within the serial timeout period: ' num2str(BLE.Timeout) '[s]'])
+            % throw an exception to sto any remaining process (especially
+            % the plots)
+            ME = MException('MIMU:KnockKonckNoAnswer', ...
+            'Command sent the MMIMU but no answer');
+            throw(ME);
         end
         
         
@@ -222,7 +204,7 @@ if ~occured_error
         % elapsed
         while abort_request == 0
             if MIMU.BytesAvailable > 0
-                fwrite(file,fread(MIMU,MIMU.BytesAvailable,'uint8'),'uint8'); % Whatever we get from the serial is loged in the .bin file
+                fwrite(binFile,fread(MIMU,MIMU.BytesAvailable,'uint8'),'uint8'); % Whatever we get from the serial is loged in the .bin file
             end
             drawnow % make sure the cancel window is visible
         end
