@@ -1,0 +1,10 @@
+Alway forget and repair device
+COM3
+COM4 <---- This one
+
+
+Copy_of_osmium_data.m --> 43 (Raw of each IMU)
+D:\Dropbox\51_MIMU Inertial Elements\03_Code from Inertial Elements\MIMU48XC\MIMU48XC-4844-Raw
+
+log_mimu_data.m --> 48-19 (Raw of ALL IMU)
+D:\Dropbox\51_MIMU Inertial Elements\03_Code from Inertial Elements\MIMU48XC\Raw
